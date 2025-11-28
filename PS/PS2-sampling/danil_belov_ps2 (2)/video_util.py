@@ -36,9 +36,8 @@ def animate_plan(env: ManipulatorEnv, plan: List[State], video_output_file: Opti
             video_writer.write(mat)
 
         if i != len(plan) - 1:
-            plt.pause(0.05)
             plt.clf()
         else:
             if video_writer is not None:
                 video_writer.release()
-            plt.show()
+            plt.close()
