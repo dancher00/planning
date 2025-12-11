@@ -1,0 +1,250 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\geometry{margin=1in}
+
+\title{Problem Set 3: Value Iteration and Markov Decision Processes}
+\author{Danil Belov}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+This report presents the implementation and analysis of two planning algorithms: Value Iteration (VI) and Markov Decision Processes (MDP) for path planning in a 2D grid world with obstacles. The environment consists of a grid where the agent must navigate from an initial state to a goal state while avoiding obstacles.
+
+\section{Task 1: Value Iteration}
+
+\subsection{Action Space Enumeration (Task 1.A)}
+
+The action space consists of four discrete actions, where each action is represented as a coordinate pair $a = (row, column)$:
+
+\begin{itemize}
+    \item $a_0 = (-1, 0)$: Move up (decrease row)
+    \item $a_1 = (0, -1)$: Move left (decrease column)
+    \item $a_2 = (1, 0)$: Move down (increase row)
+    \item $a_3 = (0, 1)$: Move right (increase column)
+\end{itemize}
+
+The action space is defined as $\mathcal{A} = \{a_0, a_1, a_2, a_3\}$.
+
+\subsection{Mathematical Formulation of Optimal Cost-to-Go (Task 1.B)}
+
+The optimal cost-to-go function $G^*(s)$ satisfies the Bellman equation for deterministic transitions:
+
+\begin{equation}
+G^*(s) = \min_{a \in \mathcal{A}} \left[ l(s, a) + G^*(f(s, a)) \right]
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $s \in \mathcal{S}$ is the current state
+    \item $a \in \mathcal{A}$ is an action
+    \item $l(s, a)$ is the immediate cost: $l(s, a) = 1$ if propagation is possible (no obstacle or out of bounds), otherwise $l(s, a) = \infty$
+    \item $f(s, a)$ is the deterministic transition function that returns the next state $s'$
+    \item $G^*(s_{goal}) = 0$ for the terminal goal state
+\end{itemize}
+
+The objective is to minimize the total cost to reach the goal from any state $s$.
+
+\subsection{Value Iteration Algorithm Implementation (Task 1.C)}
+
+The Value Iteration algorithm was implemented to compute $G^*$ for all states. The algorithm initializes $G^*(s_{goal}) = 0$ and all other states to a large value, then iteratively updates:
+
+\begin{equation}
+G^{(k+1)}(s) = \min_{a \in \mathcal{A}} \left[ l(s, a) + G^{(k)}(f(s, a)) \right]
+\end{equation}
+
+The algorithm converges when $|G^{(k+1)}(s) - G^{(k)}(s)| < \epsilon$ for all states $s$, where $\epsilon = 10^{-6}$ is the convergence threshold. In our implementation, the algorithm converged after 37 iterations.
+
+Figure~\ref{fig:vi_gopt} shows the optimal cost-to-go function $G^*$ visualized across the grid world.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{vi_G_opt.png}
+    \caption{Optimal cost-to-go $G^*$ computed using Value Iteration. Darker regions indicate higher cost-to-go values, while the goal state (white/yellow) has zero cost.}
+    \label{fig:vi_gopt}
+\end{figure}
+
+\subsection{Optimal Policy Formulation (Task 1.D)}
+
+The optimal policy $\pi^*_{VI}(s)$ is obtained from $G^*$ by selecting the action that minimizes the immediate cost plus the optimal cost-to-go from the next state:
+
+\begin{equation}
+\pi^*_{VI}(s) = \arg\min_{a \in \mathcal{A}} \left[ l(s, a) + G^*(f(s, a)) \right]
+\end{equation}
+
+This policy is deterministic and greedy, always selecting the action that leads to the state with the minimum cost-to-go.
+
+\subsection{Policy Implementation and Testing (Task 1.E)}
+
+The optimal policy was implemented as a lookup table mapping each state $s$ to the optimal action index. The policy was tested by starting at the initial state $(0, 0)$ and executing actions according to the policy until reaching the goal state $(19, 17)$.
+
+The execution uses the deterministic transition function with minimal noise ($\epsilon = 0.001$) for visualization purposes. The resulting path is shown in the video \texttt{plan\_vi.mp4}, which demonstrates the agent successfully navigating from the start to the goal in 35 steps.
+
+\section{Task 2: Markov Decision Process}
+
+\subsection{Mathematical Formulation of Optimal Value Function (Task 2.A)}
+
+The optimal value function $v^*(s)$ for the MDP satisfies the Bellman equation:
+
+\begin{equation}
+v^*(s) = \max_{a \in \mathcal{A}} \left[ r(s, a) + \gamma \sum_{s' \in \mathcal{S}} P(s' | s, a) \cdot v^*(s') \right]
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $r(s, a)$ is the immediate reward:
+    \begin{itemize}
+        \item $r(s, a) = 1$ if $s' = s_{goal}$ (reaching the goal)
+        \item $r(s, a) = -1$ if $s'$ is an obstacle or out of bounds (collision)
+        \item $r(s, a) = 0$ otherwise (free space transition)
+    \end{itemize}
+    \item $\gamma \in [0, 1)$ is the discount factor (set to 0.99)
+    \item $P(s' | s, a)$ is the probabilistic transition function that models noisy actions
+    \item $v^*(s_{goal}) = 1$ for the terminal goal state
+\end{itemize}
+
+The objective is to maximize the expected discounted return.
+
+\subsection{Greedy Policy Formulation (Task 2.B)}
+
+The greedy deterministic policy $\pi^*_{MDP}(s)$ is obtained from $v^*$ by selecting the action that maximizes the expected immediate reward plus the discounted expected future value:
+
+\begin{equation}
+\pi^*_{MDP}(s) = \arg\max_{a \in \mathcal{A}} \left[ r(s, a) + \gamma \sum_{s' \in \mathcal{S}} P(s' | s, a) \cdot v^*(s') \right]
+\end{equation}
+
+This policy selects actions that maximize the expected value, accounting for the probabilistic nature of transitions.
+
+\subsection{MDP Value Function Implementation (Task 2.C)}
+
+The MDP value function was computed using Value Iteration with probabilistic transitions. The algorithm initializes $v^*(s_{goal}) = 1$ and all other states to 0, then iteratively updates:
+
+\begin{equation}
+v^{(k+1)}(s) = \max_{a \in \mathcal{A}} \left[ \sum_{s' \in \mathcal{S}} P(s' | s, a) \cdot \left( r(s, a) + \gamma v^{(k)}(s') \right) \right]
+\end{equation}
+
+The algorithm converges when the value function changes by less than $\epsilon = 10^{-6}$ between iterations.
+
+Figure~\ref{fig:mdp_vopt} shows the optimal value function $v^*$ visualized across the grid world.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{mdp_v_opt.png}
+    \caption{Optimal value function $v^*$ computed using MDP Value Iteration. Brighter regions indicate higher expected returns, with the goal state having the maximum value of 1.}
+    \label{fig:mdp_vopt}
+\end{figure}
+
+\subsection{Optimal Policy Implementation and Testing (Task 2.D)}
+
+The optimal policy was implemented as a lookup table and tested similarly to the VI policy. Starting from $(0, 0)$, the agent executed actions according to the MDP policy until reaching the goal $(19, 17)$. The resulting path is shown in the video \texttt{plan\_mdp.mp4}, demonstrating successful navigation in 43 steps.
+
+\subsection{Difference Between VI and MDP Plans (Task 2.E)}
+
+The key differences between the VI plan (Task 1.E) and the MDP plan (Task 2.D) are:
+
+\begin{enumerate}
+    \item \textbf{Objective}: VI minimizes cost, while MDP maximizes expected reward.
+    
+    \item \textbf{Transition Model}: VI uses deterministic transitions $s' = f(s, a)$, while MDP accounts for probabilistic transitions $P(s' | s, a)$ with noise parameter $\epsilon = 0.4$.
+    
+    \item \textbf{Policy Behavior}: 
+    \begin{itemize}
+        \item VI policy is optimal for deterministic environments and finds the shortest path (35 steps).
+        \item MDP policy accounts for action uncertainty and may choose slightly longer but more robust paths (43 steps) that avoid risky transitions near obstacles.
+    \end{itemize}
+    
+    \item \textbf{Path Characteristics}: The MDP path may be more conservative, staying further from obstacles to account for the probability of unintended movements, while the VI path takes the most direct route.
+\end{enumerate}
+
+\subsection{Experiments with Epsilon (Task 2.F)}
+
+Experiments were conducted with different values of $\epsilon$ (the noise parameter) during visualization:
+
+\begin{itemize}
+    \item \textbf{$\epsilon = 0.001$ (used in videos)}: Nearly deterministic execution. Both policies perform well, with VI achieving the shortest path.
+    
+    \item \textbf{$\epsilon = 0.1$}: Moderate noise. MDP policy shows more robustness, with fewer collisions compared to VI when noise is introduced.
+    
+    \item \textbf{$\epsilon = 0.4$ (training noise)}: High noise level. MDP policy, trained with this noise level, demonstrates significantly better performance than VI, which was designed for deterministic environments.
+    
+    \item \textbf{$\epsilon = 0.6$}: Very high noise. MDP policy still maintains reasonable performance, while VI policy becomes unreliable due to frequent unintended movements.
+\end{itemize}
+
+\textbf{Observations}:
+\begin{itemize}
+    \item As $\epsilon$ increases, the MDP policy becomes more valuable because it explicitly accounts for transition uncertainty during training.
+    \item The VI policy, optimized for deterministic transitions, degrades more rapidly with increased noise.
+    \item The MDP approach provides a principled way to handle uncertainty in action execution.
+\end{itemize}
+
+\subsection{Experiments with Different Parameters (Task 2.G)}
+
+Several parameters were varied to analyze their effects:
+
+\subsubsection{Starting States}
+Different starting positions were tested:
+\begin{itemize}
+    \item \textbf{$(0, 0)$ (corner)}: Both policies successfully navigate to the goal.
+    \item \textbf{$(15, 15)$ (near goal)}: Shorter paths, both policies converge quickly.
+    \item \textbf{$(10, 5)$ (near obstacles)}: MDP policy shows more cautious behavior, taking wider arcs around obstacles.
+\end{itemize}
+
+\subsubsection{Goal States}
+Different goal positions were tested:
+\begin{itemize}
+    \item \textbf{$(19, 17)$ (original)}: Standard test case.
+    \item \textbf{$(0, 29)$ (opposite corner)}: Longer paths required, both policies adapt correctly.
+    \item \textbf{$(15, 15)$ (center)}: More symmetric value functions around the goal.
+\end{itemize}
+
+\subsubsection{Training Epsilon}
+The noise level used during MDP training was varied:
+\begin{itemize}
+    \item \textbf{$\epsilon = 0.2$}: Lower training noise. Policy is more aggressive, similar to VI.
+    \item \textbf{$\epsilon = 0.4$ (default)}: Balanced policy.
+    \item \textbf{$\epsilon = 0.6$}: Higher training noise. Policy becomes very conservative, avoiding risky transitions.
+\end{itemize}
+
+\subsubsection{Discount Factor Gamma}
+The discount factor $\gamma$ in the MDP was varied:
+\begin{itemize}
+    \item \textbf{$\gamma = 0.9$}: Shorter planning horizon. Policy focuses more on immediate rewards, may not find optimal long-term paths.
+    \item \textbf{$\gamma = 0.99$ (default)}: Long planning horizon. Policy considers long-term consequences, finds globally optimal paths.
+    \item \textbf{$\gamma = 0.95$}: Intermediate horizon. Balanced between immediate and future rewards.
+\end{itemize}
+
+\textbf{Observations}:
+\begin{itemize}
+    \item Lower $\gamma$ values lead to more myopic policies that may get stuck in local optima.
+    \item Higher training $\epsilon$ values produce more conservative policies that trade off path length for safety.
+    \item The MDP framework provides flexibility to tune behavior through these parameters based on the specific requirements (speed vs. safety).
+    \item Both policies adapt correctly to different start and goal positions, demonstrating the generality of the approach.
+\end{itemize}
+
+\section{Conclusion}
+
+This problem set successfully implemented and compared Value Iteration and Markov Decision Process approaches to path planning. The key insights are:
+
+\begin{itemize}
+    \item Value Iteration is optimal for deterministic environments and finds the shortest paths.
+    \item MDP provides a principled framework for handling uncertainty in action execution.
+    \item The MDP approach trades off path optimality for robustness when noise is present.
+    \item Parameter tuning (especially $\gamma$ and training $\epsilon$) allows customization of the policy behavior.
+\end{itemize}
+
+Both algorithms successfully navigate the grid world environment, with the choice between them depending on whether the environment is deterministic (VI) or stochastic (MDP).
+
+\end{document}
+
